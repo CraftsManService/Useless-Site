@@ -1,3 +1,3 @@
-This is a useless site. \n
-Links for Games: \n
-None yet! Keep Updated! \n
+This is a useless site.\
+Links for Games:<br>
+None yet! Keep Updated!\
