@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>P2P Multiplayer Game</title>
+    <script src="https://unpkg.com"></script>
+    <style>
+        canvas { border: 2px solid black; background: #eee; display: block; margin: 10px auto; }
+        .controls { text-align: center; font-family: sans-serif; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h3>Your ID: <span id="my-id">...</span></h3>
+        <input type="text" id="peer-id-input" placeholder="Paste Friend's ID">
+        <button onclick="connectToPeer()">Connect</button>
+        <p>Use Arrow Keys to move your square (Red). Friend is Blue.</p>
+    </div>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const peer = new Peer(); // Create a new Peer
+        let conn;
+
+        let players = {
+            me: { x: 50, y: 50, color: 'red' },
+            peer: { x: 300, y: 300, color: 'blue', active: false }
+        };
+
+        // 1. Setup Peer events
+        peer.on('open', id => document.getElementById('my-id').innerText = id);
+        
+        peer.on('connection', c => {
+            conn = c;
+            setupConnection();
+        });
+
+        function connectToPeer() {
+            const peerId = document.getElementById('peer-id-input').value;
+            conn = peer.connect(peerId);
+            setupConnection();
+        }
+
+        function setupConnection() {
+            players.peer.active = true;
+            conn.on('data', data => {
+                players.peer.x = data.x;
+                players.peer.y = data.y;
+            });
+        }
+
+        // 2. Game Loop & Controls
+        window.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp') players.me.y -= 10;
+            if (e.key === 'ArrowDown') players.me.y += 10;
+            if (e.key === 'ArrowLeft') players.me.x -= 10;
+            if (e.key === 'ArrowRight') players.me.x += 10;
+            
+            if (conn && conn.open) {
+                conn.send({ x: players.me.x, y: players.me.y });
+            }
+        });
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw Me
+            ctx.fillStyle = players.me.color;
+            ctx.fillRect(players.me.x, players.me.y, 30, 30);
+            // Draw Peer
+            if (players.peer.active) {
+                ctx.fillStyle = players.peer.color;
+                ctx.fillRect(players.peer.x, players.peer.y, 30, 30);
+            }
+            requestAnimationFrame(draw);
+        }
+        draw();
+    </script>
+</body>
+</html>
