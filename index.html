@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GitHub P2P Tag</title>
+    <script src="https://unpkg.com"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #222; color: white; overflow: hidden; }
+        canvas { background: #333; border: 3px solid #555; display: block; margin: 10px auto; touch-action: none; }
+        .ui { margin-top: 20px; }
+        #status { color: #0f0; }
+        button { padding: 8px 16px; cursor: pointer; border-radius: 5px; border: none; background: #444; color: white; }
+    </style>
+</head>
+<body>
+    <h1>P2P Tag</h1>
+    <div class="ui">
+        <p id="status">Status: Initializing...</p>
+        <div id="join-section">
+            <p>Your ID: <b id="my-id">...</b></p>
+            <button onclick="copyInviteLink()">Copy Invite Link</button>
+        </div>
+    </div>
+    <canvas id="game" width="600" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+        const peer = new Peer();
+        let conn;
+
+        const p = {
+            me: { x: 50, y: 50, color: '#ff4757', score: 0 },
+            friend: { x: 500, y: 300, color: '#2ed573', score: 0, active: false }
+        };
+
+        // --- Network Logic ---
+        peer.on('open', id => {
+            document.getElementById('my-id').innerText = id;
+            status.innerText = "Status: Ready! Send link to a friend.";
+            checkUrlParam();
+        });
+
+        peer.on('connection', c => {
+            conn = c;
+            setupConn();
+        });
+
+        function setupConn() {
+            p.friend.active = true;
+            status.innerText = "Status: Connected!";
+            conn.on('data', data => {
+                p.friend.x = data.x;
+                p.friend.y = data.y;
+            });
+        }
+
+        function checkUrlParam() {
+            const friendId = new URLSearchParams(window.location.search).get('join');
+            if (friendId) {
+                conn = peer.connect(friendId);
+                setupConn();
+            }
+        }
+
+        function copyInviteLink() {
+            const url = window.location.href.split('?')[0] + "?join=" + peer.id;
+            navigator.clipboard.writeText(url);
+            alert("Link copied! Send it to a friend.");
+        }
+
+        // --- Game Logic ---
+        const keys = {};
+        window.onkeydown = e => keys[e.key] = true;
+        window.onkeyup = e => keys[e.key] = false;
+
+        function update() {
+            const speed = 5;
+            if (keys['ArrowUp'] || keys['w']) p.me.y -= speed;
+            if (keys['ArrowDown'] || keys['s']) p.me.y += speed;
+            if (keys['ArrowLeft'] || keys['a']) p.me.x -= speed;
+            if (keys['ArrowRight'] || keys['d']) p.me.x += speed;
+
+            // Send position to friend
+            if (conn && conn.open) {
+                conn.send({ x: p.me.x, y: p.me.y });
+            }
+        }
+
+        function draw() {
+            update();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Me
+            ctx.fillStyle = p.me.color;
+            ctx.fillRect(p.me.x, p.me.y, 30, 30);
+
+            // Draw Friend
+            if (p.friend.active) {
+                ctx.fillStyle = p.friend.color;
+                ctx.fillRect(p.friend.x, p.friend.y, 30, 30);
+            }
+            requestAnimationFrame(draw);
+        }
+        draw();
+    </script>
+</body>
+</html>
