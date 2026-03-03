@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>C++ Multiplayer Battle</title>
+    <meta charset="UTF-8">
+    <title>C++ Multiplayer Game</title>
     <style>
         body { margin: 0; background: #000; color: #0f0; font-family: monospace; text-align: center; overflow: hidden; }
         canvas { background: #111; border: 2px solid #0f0; margin-top: 20px; cursor: crosshair; }
@@ -17,7 +18,7 @@
         const ctx = canvas.getContext('2d');
         const status = document.getElementById('status');
         
-        // YOUR DIRECT CLOUDSHELL LINK
+        // YOUR DIRECT CLOUDSHELL LINK (Update this if your ID changed)
         const SERVER_URL = 'https://8080-cs-1b5bcf6f-5fa5-4bf0-a2be-1daba682b8ec.cs-us-central1-pits.cloudshell.dev';
 
         const myId = Math.random().toString(16).slice(2, 6);
@@ -29,16 +30,17 @@
             try {
                 const res = await fetch(SERVER_URL, {
                     method: 'POST',
-                    // Sending our ID and position as a simple string for the C++ to read
+                    // Sending ID and position as a comma-separated string
                     body: `${myId},${Math.floor(me.x)},${Math.floor(me.y)}`
                 });
                 
-                players = await res.json();
-                status.innerText = "C++ SERVER LIVE (Players: " + Object.keys(players).length + ")";
+                const data = await res.json();
+                players = data; 
+                status.innerText = "C++ SERVER LIVE (" + Object.keys(players).length + " Players)";
             } catch (e) {
-                status.innerText = "OFFLINE - Make sure Web Preview is PUBLIC";
+                status.innerText = "OFFLINE - Check if Web Preview is PUBLIC";
             }
-            setTimeout(sync, 50); // Sync every 50ms
+            setTimeout(sync, 50); // Refresh every 50ms
         }
 
         // 2. CONTROLS
@@ -48,23 +50,25 @@
             me.y = e.clientY - rect.top;
         };
 
-        // 3. DRAWING
+        // 3. DRAWING LOOP
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw Me (Cyan)
-            ctx.fillStyle = '#0ff';
-            ctx.fillRect(me.x - 15, me.y - 15, 30, 30);
-            ctx.fillText("YOU", me.x - 15, me.y - 20);
-
-            // Draw Others (Red)
+            // Draw Other Players (Red)
             ctx.fillStyle = '#f00';
             for (let id in players) {
                 if (id !== myId) {
                     let p = players[id];
                     ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
+                    ctx.fillText(id, p.x - 15, p.y - 20);
                 }
             }
+
+            // Draw Me (Cyan)
+            ctx.fillStyle = '#0ff';
+            ctx.fillRect(me.x - 15, me.y - 15, 30, 30);
+            ctx.fillText("YOU", me.x - 15, me.y - 20);
+
             requestAnimationFrame(draw);
         }
 
