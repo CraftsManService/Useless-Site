@@ -2,84 +2,83 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Serverless GitHub Game</title>
-    <!-- Trystero library: Uses BitTorrent trackers for zero-config multiplayer -->
+    <title>Multiplayer Battle</title>
+    <!-- This library handles the "Server" part inside the browser -->
     <script src="https://unpkg.com"></script>
     <style>
-        body { margin: 0; background: #111; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        canvas { background: #222; border: 2px solid #444; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        .info { position: absolute; top: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; text-align: center; }
+        body { margin: 0; background: #000; color: #0f0; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        canvas { background: #111; border: 2px solid #0f0; box-shadow: 0 0 20px #0f0; cursor: crosshair; }
+        .hud { position: absolute; top: 10px; background: rgba(0,0,0,0.8); padding: 10px; border: 1px solid #0f0; }
     </style>
 </head>
 <body>
 
-    <div class="info">
-        <h3 id="room-name">Connecting...</h3>
-        <p>Use WASD or Arrows. Share your URL to play!</p>
+    <div class="hud">
+        Status: <span id="status">Searching for Players...</span><br>
+        Players Online: <span id="count">1</span>
     </div>
+
     <canvas id="game" width="800" height="500"></canvas>
 
     <script>
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
-        
-        // --- 1. Multiplayer Setup ---
-        // Join a "room" based on your URL or a default name
-        const config = {appId: 'my-github-game-123'};
+        const statusEl = document.getElementById('status');
+        const countEl = document.getElementById('count');
+
+        // --- MULTIPLAYER LOGIC ---
+        // This "Room" connects everyone on your website together
+        const config = {appId: 'abcserver-iready-game'}; 
         const room = Trystero.joinRoom(config, 'lobby');
-        
         const [sendMove, getMove] = room.makeAction('move');
-        const players = {}; // Other players
-        const me = { id: Math.random().toString(36).substr(2, 9), x: 400, y: 250, color: 'cyan' };
 
-        room.onPeerJoin(peerId => {
-            console.log(`${peerId} joined`);
-            document.getElementById('room-name').innerText = "Friend Joined!";
+        const me = { x: 400, y: 250, id: Math.random().toString(16).slice(2, 6) };
+        const peers = {};
+
+        room.onPeerJoin(id => {
+            statusEl.innerText = "Player Connected!";
+            countEl.innerText = Object.keys(peers).length + 2;
         });
 
-        room.onPeerLeave(peerId => delete players[peerId]);
-
-        // Receive movements from others
-        getMove((data, peerId) => {
-            players[peerId] = data;
+        room.onPeerLeave(id => {
+            delete peers[id];
+            countEl.innerText = Object.keys(peers).length + 1;
+            if (Object.keys(peers).length === 0) statusEl.innerText = "Waiting for players...";
         });
 
-        // --- 2. Game Logic ---
-        const keys = {};
-        window.onkeydown = e => keys[e.key.toLowerCase()] = true;
-        window.onkeyup = e => keys[e.key.toLowerCase()] = false;
+        // This receives data from other players (the "Server" work)
+        getMove((data, id) => {
+            peers[id] = data;
+        });
 
-        function update() {
-            let moved = false;
-            if (keys['w'] || keys['arrowup']) { me.y -= 5; moved = true; }
-            if (keys['s'] || keys['arrowdown']) { me.y += 5; moved = true; }
-            if (keys['a'] || keys['arrowleft']) { me.x -= 5; moved = true; }
-            if (keys['d'] || keys['arrowright']) { me.x += 5; moved = true; }
+        // --- CONTROLS ---
+        window.onmousemove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            me.x = e.clientX - rect.left;
+            me.y = e.clientY - rect.top;
+            // Send our position to everyone else
+            sendMove({x: me.x, y: me.y, id: me.id});
+        };
 
-            if (moved) sendMove({x: me.x, y: me.y, color: me.color});
-        }
-
-        function draw() {
-            update();
+        // --- DRAWING ---
+        function frame() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw others
-            Object.values(players).forEach(p => {
-                ctx.fillStyle = 'orange';
-                ctx.fillRect(p.x, p.y, 30, 30);
+            
+            // Draw Other Players (Magenta)
+            Object.values(peers).forEach(p => {
+                ctx.fillStyle = '#f0f';
+                ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
+                ctx.fillText("ID: " + p.id, p.x - 15, p.y - 20);
             });
 
-            // Draw me
-            ctx.fillStyle = me.color;
-            ctx.fillRect(me.x, me.y, 30, 30);
-            ctx.strokeStyle = 'white';
-            ctx.strokeRect(me.x, me.y, 30, 30);
+            // Draw Me (Cyan)
+            ctx.fillStyle = '#0ff';
+            ctx.fillRect(me.x - 15, me.y - 15, 30, 30);
+            ctx.fillText("YOU (" + me.id + ")", me.x - 15, me.y - 20);
 
-            requestAnimationFrame(draw);
+            requestAnimationFrame(frame);
         }
-
-        document.getElementById('room-name').innerText = "Room: Lobby (Ready)";
-        draw();
+        frame();
     </script>
 </body>
 </html>
