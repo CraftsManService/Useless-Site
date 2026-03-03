@@ -1,53 +1,69 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Relay Multiplayer</title>
+    <title>Multiplayer Battle</title>
+    <!-- Firebase is usually allowed on Chromebooks -->
+    <script src="https://www.gstatic.com"></script>
+    <script src="https://www.gstatic.com"></script>
     <style>
-        body { margin: 0; background: #000; color: #0f0; font-family: monospace; text-align: center; }
-        canvas { background: #111; border: 2px solid #0f0; margin-top: 20px; }
+        body { margin: 0; background: #000; color: #0f0; font-family: monospace; text-align: center; overflow: hidden; }
+        canvas { background: #111; border: 2px solid #0f0; margin-top: 20px; cursor: none; }
+        #ui { position: absolute; top: 10px; width: 100%; }
     </style>
 </head>
 <body>
-    <div id="status">Connecting to Relay...</div>
-    <canvas id="game" width="600" height="400"></canvas>
+    <div id="ui">Status: <span id="status">Connecting to Database...</span></div>
+    <canvas id="game" width="800" height="500"></canvas>
 
     <script>
+        // 1. DATABASE SETUP (Using a public demo config)
+        // If this doesn't work, we'll need to make your own free Firebase account
+        const firebaseConfig = { databaseURL: "https://multiplayer-demo-default-rtdb.firebaseio.com" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database().ref('players');
+
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
-        const myId = Math.random().toString(16).slice(2, 6);
-        let me = { x: 300, y: 200 };
+        const myId = Math.random().toString(16).slice(2, 8);
+        const me = { x: 400, y: 250, color: '#0ff' };
         let players = {};
 
-        // 1. RELAY SYSTEM (Works on Blocked Chromebooks)
-        // This uses a public "pubsub" relay to bypass firewalls
-        async function sync() {
-            try {
-                // We send our data to a public JSON bin or relay
-                // Using a Mock Relay for this example:
-                const res = await fetch('https://webhook.site', { 
-                    method: 'POST', 
-                    mode: 'no-cors',
-                    body: JSON.stringify({id: myId, x: me.x, y: me.y}) 
-                });
-                document.getElementById('status').innerText = "Playing (Relay Mode)";
-            } catch (e) {
-                document.getElementById('status').innerText = "Firewall Blocked";
-            }
-            setTimeout(sync, 100);
+        // 2. NETWORK LOGIC
+        // Update my position in the database
+        function sync() {
+            db.child(myId).set({ x: me.x, y: me.y, color: me.color });
+            document.getElementById('status').innerText = "Online (ID: " + myId + ")";
         }
 
+        // Listen for all players
+        db.on('value', (snapshot) => {
+            players = snapshot.val() || {};
+        });
+
+        // Remove me when I close the tab
+        db.child(myId).onDisconnect().remove();
+
+        // 3. CONTROLS & DRAWING
         window.onmousemove = (e) => {
             const rect = canvas.getBoundingClientRect();
             me.x = e.clientX - rect.left;
             me.y = e.clientY - rect.top;
+            sync();
         };
 
         function draw() {
-            ctx.clearRect(0, 0, 600, 400);
-            ctx.fillStyle = '#0ff'; ctx.fillRect(me.x - 10, me.y - 10, 20, 20);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Everyone
+            for (let id in players) {
+                const p = players[id];
+                ctx.fillStyle = (id === myId) ? p.color : '#f0f'; // Me is Cyan, Others are Magenta
+                ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
+                ctx.fillText(id, p.x - 15, p.y - 20);
+            }
             requestAnimationFrame(draw);
         }
-        sync(); draw();
+        draw();
     </script>
 </body>
 </html>
