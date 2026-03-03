@@ -1,74 +1,60 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>C++ Multiplayer Game</title>
+    <title>C++ WASD Game</title>
     <style>
         body { margin: 0; background: #000; color: #0f0; font-family: monospace; text-align: center; overflow: hidden; }
-        canvas { background: #111; border: 2px solid #0f0; margin-top: 20px; cursor: crosshair; }
-        #status { position: absolute; top: 10px; width: 100%; font-size: 1.2em; }
+        canvas { background: #111; border: 2px solid #0f0; margin-top: 20px; }
     </style>
 </head>
 <body>
-    <div id="status">Connecting to C++ Server...</div>
+    <div id="status">Connecting...</div>
     <canvas id="game" width="800" height="500"></canvas>
 
     <script>
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
         const status = document.getElementById('status');
-        
-        // YOUR DIRECT CLOUDSHELL LINK (Update this if your ID changed)
         const SERVER_URL = 'https://8080-cs-1b5bcf6f-5fa5-4bf0-a2be-1daba682b8ec.cs-us-central1-pits.cloudshell.dev';
 
         const myId = Math.random().toString(16).slice(2, 6);
         let me = { x: 400, y: 250 };
         let players = {};
+        const keys = {};
 
-        // 1. SYNC WITH C++ SERVER
+        // 1. KEYBOARD CONTROLS
+        window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+
         async function sync() {
             try {
+                // Update movement logic
+                const speed = 5;
+                if (keys['w'] || keys['arrowup']) me.y -= speed;
+                if (keys['s'] || keys['arrowdown']) me.y += speed;
+                if (keys['a'] || keys['arrowleft']) me.x -= speed;
+                if (keys['d'] || keys['arrowright']) me.x += speed;
+
                 const res = await fetch(SERVER_URL, {
                     method: 'POST',
-                    // Sending ID and position as a comma-separated string
                     body: `${myId},${Math.floor(me.x)},${Math.floor(me.y)}`
                 });
-                
-                const data = await res.json();
-                players = data; 
-                status.innerText = "C++ SERVER LIVE (" + Object.keys(players).length + " Players)";
+                players = await res.json();
+                status.innerText = "LIVE - Players: " + Object.keys(players).length;
             } catch (e) {
-                status.innerText = "OFFLINE - Check if Web Preview is PUBLIC";
+                status.innerText = "OFFLINE";
             }
-            setTimeout(sync, 50); // Refresh every 50ms
+            setTimeout(sync, 30); // 30ms for smoother movement
         }
 
-        // 2. CONTROLS
-        window.onmousemove = (e) => {
-            const rect = canvas.getBoundingClientRect();
-            me.x = e.clientX - rect.left;
-            me.y = e.clientY - rect.top;
-        };
-
-        // 3. DRAWING LOOP
         function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw Other Players (Red)
-            ctx.fillStyle = '#f00';
+            ctx.clearRect(0, 0, 800, 500);
             for (let id in players) {
-                if (id !== myId) {
-                    let p = players[id];
-                    ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
-                    ctx.fillText(id, p.x - 15, p.y - 20);
-                }
+                ctx.fillStyle = (id === myId) ? '#0ff' : '#f00';
+                const p = players[id];
+                ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
+                ctx.fillText(id, p.x - 15, p.y - 20);
             }
-
-            // Draw Me (Cyan)
-            ctx.fillStyle = '#0ff';
-            ctx.fillRect(me.x - 15, me.y - 15, 30, 30);
-            ctx.fillText("YOU", me.x - 15, me.y - 20);
-
             requestAnimationFrame(draw);
         }
 
