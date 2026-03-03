@@ -1,64 +1,62 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>C++ WASD Game</title>
+    <title>Multiplayer Battle</title>
+    <script src="https://www.gstatic.com"></script>
+    <script src="https://www.gstatic.com"></script>
     <style>
         body { margin: 0; background: #000; color: #0f0; font-family: monospace; text-align: center; overflow: hidden; }
-        canvas { background: #111; border: 2px solid #0f0; margin-top: 20px; }
+        canvas { background: #111; border: 2px solid #0f0; margin-top: 20px; cursor: none; }
+        #status { position: absolute; top: 10px; width: 100%; font-size: 1.2em; }
     </style>
 </head>
 <body>
-    <div id="status">Connecting...</div>
+    <div id="status">Status: <span id="state">Connecting...</span></div>
     <canvas id="game" width="800" height="500"></canvas>
 
     <script>
+        // 1. PUBLIC DATABASE (Usually allowed on Chromebooks)
+        const firebaseConfig = { databaseURL: "https://multiplayer-demo-default-rtdb.firebaseio.com" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database().ref('players_abcserver');
+
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
-        const status = document.getElementById('status');
-        const SERVER_URL = 'https://8080-cs-1b5bcf6f-5fa5-4bf0-a2be-1daba682b8ec.cs-us-central1-pits.cloudshell.dev';
-
-        const myId = Math.random().toString(16).slice(2, 6);
-        let me = { x: 400, y: 250 };
+        const myId = Math.random().toString(16).slice(2, 8);
+        let me = { x: 400, y: 250, color: '#0ff' };
         let players = {};
         const keys = {};
 
-        // 1. KEYBOARD CONTROLS
-        window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
-        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+        // 2. MOVEMENT & SYNC
+        window.onkeydown = e => keys[e.key.toLowerCase()] = true;
+        window.onkeyup = e => keys[e.key.toLowerCase()] = false;
 
-        async function sync() {
-            try {
-                // Update movement logic
-                const speed = 5;
-                if (keys['w'] || keys['arrowup']) me.y -= speed;
-                if (keys['s'] || keys['arrowdown']) me.y += speed;
-                if (keys['a'] || keys['arrowleft']) me.x -= speed;
-                if (keys['d'] || keys['arrowright']) me.x += speed;
-
-                const res = await fetch(SERVER_URL, {
-                    method: 'POST',
-                    body: `${myId},${Math.floor(me.x)},${Math.floor(me.y)}`
-                });
-                players = await res.json();
-                status.innerText = "LIVE - Players: " + Object.keys(players).length;
-            } catch (e) {
-                status.innerText = "OFFLINE";
-            }
-            setTimeout(sync, 30); // 30ms for smoother movement
+        function sync() {
+            const speed = 5;
+            if (keys['w'] || keys['arrowup']) me.y -= speed;
+            if (keys['s'] || keys['arrowdown']) me.y += speed;
+            if (keys['a'] || keys['arrowleft']) me.x -= speed;
+            if (keys['d'] || keys['arrowright']) me.x += speed;
+            
+            db.child(myId).set({ x: me.x, y: me.y });
+            document.getElementById('state').innerText = "ONLINE (" + Object.keys(players).length + " Players)";
         }
 
+        db.on('value', snap => players = snap.val() || {});
+        db.child(myId).onDisconnect().remove();
+
+        // 3. DRAWING
         function draw() {
-            ctx.clearRect(0, 0, 800, 500);
+            sync();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             for (let id in players) {
-                ctx.fillStyle = (id === myId) ? '#0ff' : '#f00';
                 const p = players[id];
+                ctx.fillStyle = (id === myId) ? '#0ff' : '#f0f';
                 ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
-                ctx.fillText(id, p.x - 15, p.y - 20);
+                ctx.fillText(id.substring(0,4), p.x - 15, p.y - 20);
             }
             requestAnimationFrame(draw);
         }
-
-        sync();
         draw();
     </script>
 </body>
