@@ -2,108 +2,144 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GitHub P2P Tag</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer P2P Game</title>
+    <!-- Use a reliable CDN for PeerJS -->
     <script src="https://unpkg.com"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: white; overflow: hidden; }
-        canvas { background: #333; border: 3px solid #555; display: block; margin: 10px auto; touch-action: none; }
-        .ui { margin-top: 20px; }
-        #status { color: #0f0; }
-        button { padding: 8px 16px; cursor: pointer; border-radius: 5px; border: none; background: #444; color: white; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #1a1a1a; color: #eee; margin: 0; padding: 20px; }
+        canvas { background: #000; border: 4px solid #444; display: block; margin: 20px auto; max-width: 95vw; box-shadow: 0 0 20px rgba(0,0,0,0.5); cursor: crosshair; }
+        .ui-panel { background: #333; padding: 15px; border-radius: 8px; display: inline-block; min-width: 300px; }
+        .status-on { color: #2ecc71; font-weight: bold; }
+        .status-off { color: #e74c3c; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; background: #3498db; color: white; transition: 0.2s; }
+        button:hover { background: #2980b9; }
+        #debug-log { font-size: 12px; color: #888; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <h1>P2P Tag</h1>
-    <div class="ui">
-        <p id="status">Status: Initializing...</p>
-        <div id="join-section">
-            <p>Your ID: <b id="my-id">...</b></p>
-            <button onclick="copyInviteLink()">Copy Invite Link</button>
+
+    <div class="ui-panel">
+        <h2>P2P Survival</h2>
+        <p>Status: <span id="status" class="status-off">Connecting to Network...</span></p>
+        <div id="id-display" style="display:none;">
+            <p>Your ID: <strong id="my-id">---</strong></p>
+            <button onclick="copyLink()">Copy Invite Link</button>
         </div>
+        <div id="debug-log">Log: Initializing game...</div>
     </div>
-    <canvas id="game" width="600" height="400"></canvas>
+
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
 
     <script>
-        const canvas = document.getElementById('game');
+        const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const status = document.getElementById('status');
+        const log = (msg) => { document.getElementById('debug-log').innerText = "Log: " + msg; console.log(msg); };
+        
+        // 1. Initial Peer Setup
         const peer = new Peer();
-        let conn;
+        let conn = null;
 
-        const p = {
-            me: { x: 50, y: 50, color: '#ff4757', score: 0 },
-            friend: { x: 500, y: 300, color: '#2ed573', score: 0, active: false }
+        // Player Data
+        const players = {
+            me: { x: 100, y: 100, color: '#3498db', size: 30 },
+            friend: { x: 0, y: 0, color: '#e67e22', size: 30, active: false }
         };
 
-        // --- Network Logic ---
-        peer.on('open', id => {
+        peer.on('open', (id) => {
             document.getElementById('my-id').innerText = id;
-            status.innerText = "Status: Ready! Send link to a friend.";
-            checkUrlParam();
+            document.getElementById('status').innerText = "Online";
+            document.getElementById('status').className = "status-on";
+            document.getElementById('id-display').style.display = "block";
+            log("Connected to signaling server.");
+            checkForInvite();
         });
 
-        peer.on('connection', c => {
-            conn = c;
-            setupConn();
+        peer.on('error', err => log("PeerJS Error: " + err.type));
+
+        // 2. Connection Logic
+        peer.on('connection', (connection) => {
+            log("Friend joined!");
+            conn = connection;
+            handleConnection();
         });
 
-        function setupConn() {
-            p.friend.active = true;
-            status.innerText = "Status: Connected!";
+        function checkForInvite() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const joinId = urlParams.get('join');
+            if (joinId) {
+                log("Joining friend: " + joinId);
+                conn = peer.connect(joinId);
+                handleConnection();
+            }
+        }
+
+        function handleConnection() {
+            players.friend.active = true;
             conn.on('data', data => {
-                p.friend.x = data.x;
-                p.friend.y = data.y;
+                players.friend.x = data.x;
+                players.friend.y = data.y;
+            });
+            conn.on('close', () => {
+                players.friend.active = false;
+                log("Friend disconnected.");
             });
         }
 
-        function checkUrlParam() {
-            const friendId = new URLSearchParams(window.location.search).get('join');
-            if (friendId) {
-                conn = peer.connect(friendId);
-                setupConn();
-            }
+        function copyLink() {
+            const inviteUrl = window.location.origin + window.location.pathname + "?join=" + peer.id;
+            navigator.clipboard.writeText(inviteUrl);
+            alert("Invite link copied! Send it to a friend.");
         }
 
-        function copyInviteLink() {
-            const url = window.location.href.split('?')[0] + "?join=" + peer.id;
-            navigator.clipboard.writeText(url);
-            alert("Link copied! Send it to a friend.");
-        }
-
-        // --- Game Logic ---
+        // 3. Game Loop
         const keys = {};
-        window.onkeydown = e => keys[e.key] = true;
-        window.onkeyup = e => keys[e.key] = false;
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
 
-        function update() {
-            const speed = 5;
-            if (keys['ArrowUp'] || keys['w']) p.me.y -= speed;
-            if (keys['ArrowDown'] || keys['s']) p.me.y += speed;
-            if (keys['ArrowLeft'] || keys['a']) p.me.x -= speed;
-            if (keys['ArrowRight'] || keys['d']) p.me.x += speed;
+        function gameLoop() {
+            // Movement
+            const speed = 4;
+            if (keys['ArrowUp'] || keys['w']) players.me.y -= speed;
+            if (keys['ArrowDown'] || keys['s']) players.me.y += speed;
+            if (keys['ArrowLeft'] || keys['a']) players.me.x -= speed;
+            if (keys['ArrowRight'] || keys['d']) players.me.x += speed;
 
-            // Send position to friend
+            // Keep in bounds
+            players.me.x = Math.max(0, Math.min(canvas.width - 30, players.me.x));
+            players.me.y = Math.max(0, Math.min(canvas.height - 30, players.me.y));
+
+            // Sync with peer
             if (conn && conn.open) {
-                conn.send({ x: p.me.x, y: p.me.y });
+                conn.send({ x: players.me.x, y: players.me.y });
             }
+
+            // Draw
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Grid lines for reference
+            ctx.strokeStyle = '#222';
+            for(let i=0; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+            for(let i=0; i<canvas.height; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+
+            // Draw "Me"
+            ctx.fillStyle = players.me.color;
+            ctx.fillRect(players.me.x, players.me.y, players.me.size, players.me.size);
+            ctx.strokeStyle = "white";
+            ctx.strokeRect(players.me.x, players.me.y, players.me.size, players.me.size);
+
+            // Draw "Friend"
+            if (players.friend.active) {
+                ctx.fillStyle = players.friend.color;
+                ctx.fillRect(players.friend.x, players.friend.y, players.friend.size, players.friend.size);
+            }
+
+            requestAnimationFrame(gameLoop);
         }
 
-        function draw() {
-            update();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw Me
-            ctx.fillStyle = p.me.color;
-            ctx.fillRect(p.me.x, p.me.y, 30, 30);
-
-            // Draw Friend
-            if (p.friend.active) {
-                ctx.fillStyle = p.friend.color;
-                ctx.fillRect(p.friend.x, p.friend.y, 30, 30);
-            }
-            requestAnimationFrame(draw);
-        }
-        draw();
+        // Start Loop
+        gameLoop();
     </script>
 </body>
 </html>
